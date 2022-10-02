@@ -25,27 +25,37 @@ func run() {
 	cmd := exec.Command(os.Args[0], append([]string{"child"}, os.Args[2])...)
 
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID, // 进程隔离,隔离线程ID
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID, // 复制核心 | PID
 	}
 
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 
-	// 先进入子进程，隔离后，再进行更改hostname等操作
 	if err := cmd.Run(); err != nil {
 		panic(err)
 	}
 }
 
 func child() {
-	// 实际在这里执行 docker 命令的参数
 	cmd := exec.Command(os.Args[2])
+
+	// 实际在这里执行 docker 命令的参数
 	syscall.Sethostname([]byte("Container"))
+
+	// 在本文件系统中
+	// 不允许运行其他程序 | 不允许 set-user-id/set-group-id | 从 linux 2.4 mount 默认参数
+	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
+	// 挂载根目录
+	syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
 
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 
-	cmd.Run()
+	// 设置完成后运行bash
+	if err := cmd.Run(); err != nil {
+		panic(err)
+	}
+	syscall.Unmount("/proc", 0)
 }
