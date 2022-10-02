@@ -5,9 +5,16 @@ SRC_PATH=src
 
 all: clean build install
 
-docker:
-	go build -o $(BIN_PATH)/docker $(SRC_PATH)/*
+build:
+	$(GO) build -o $(BIN_PATH)/mdocker $(SRC_PATH)/*
 
 install:
-	cp bin/docker /usr/bin/docker
-	cp bin/docker /usr/local
+	cp bin/mdocker /usr/bin/mdocker
+	cp bin/mdocker /usr/local/bin/mdocker
+
+unistall:
+	rm -rf /usr/bin/mdocker  /usr/local/bin/mdocker
+	rm -rf bin/mdocker
+	
+clean: unistall
+
