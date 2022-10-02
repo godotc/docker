@@ -8,6 +8,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		PrintHelpManual()
+		return
+	}
+
 	fmt.Printf("Process => %v [%d]\n", os.Args, os.Getpid())
 	switch os.Args[1] {
 	case "run":
@@ -41,25 +46,46 @@ func Run() {
 	if err := cmd.Run(); err != nil { // 进入 子进程
 		panic(err)
 	}
+	cmd.Wait()
 }
 
 func Init() {
+	imageDirPath := "/var/lib/docker/images/base"
+	rootDirPath := "/var/lib/docker/containers/rootfs"
+	if _, err := os.Stat(rootDirPath); os.IsNotExist(err) {
+		__ErrCheck__(CopyFileOrDirectory(imageDirPath, rootDirPath))
+	}
 
 	// 切换主机名
-	syscall.Sethostname([]byte("Container"))
-	// 在第二/三层中 挂载 内存中的 虚拟文件系统 proc
-	syscall.Mount("proc", "/proc", "proc", 0, "")
+	__ErrCheck__(syscall.Sethostname([]byte("Container")))
 
 	// 改变文件系统的根, 无法访问其他位置
-	syscall.Chroot("rootfs")
-	syscall.Chdir("/")
+	__ErrCheck__(syscall.Chroot(rootDirPath))
+	__ErrCheck__(syscall.Chdir("/"))
+
+	// 在第二/三层中 挂载 内存中的 虚拟文件系统 proc
+	__ErrCheck__(syscall.Mount("proc", "/proc", "proc", 0, ""))
+
+	path, err := exec.LookPath(os.Args[2])
+	__ErrCheck__(err)
+	fmt.Println(path)
 
 	// 开辟第三层,运行 bash 命令, 附带所有参数 与 第二层的所有环境变量(mount)
-	if err := syscall.Exec(os.Args[2], os.Args[3:], os.Environ()); // /bin/bash args... env...
-	err != nil {
-		panic(err)
-	}
+	err = syscall.Exec(path, os.Args[2:], os.Environ()) // /bin/bash args... env...
+	__ErrCheck__(err)
 
 	// 取消 mount，退出取消 'mdocker init bash[1]' 这条线程的显示
 	syscall.Unmount("/proc", 0)
+}
+
+func CopyFileOrDirectory(src string, dst string) error {
+	fmt.Printf("Copying %s => %s\n", src, dst)
+	cmd := exec.Command("cp", "-r", src, dst)
+	return cmd.Run()
+}
+
+func __ErrCheck__(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
