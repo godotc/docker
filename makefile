@@ -18,3 +18,5 @@ unistall:
 	
 clean: unistall
 
+run: 
+	mdocker run /bin/bash

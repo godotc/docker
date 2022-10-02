@@ -11,51 +11,55 @@ func main() {
 	fmt.Printf("Process => %v [%d]\n", os.Args, os.Getpid())
 	switch os.Args[1] {
 	case "run":
-		run()
-	case "child":
-		child()
+		Run()
+	case "init":
+		Init()
 	default:
 		panic("Argument  error")
 	}
 }
 
-func run() {
+func Run() {
+	// 拼接原命令再次运行 docker 进入 Init 分支 (创建子进程)
+	cmd := exec.Command(os.Args[0], "init", os.Args[2])
 
-	// 在主进程中设置线程隔离后，替换参数进入子进程分支
-	cmd := exec.Command(os.Args[0], append([]string{"child"}, os.Args[2])...)
-
+	// 设置进程程隔离 thread-isolation
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID, // 复制核心 | PID
+		/*
+			Linux Namespace:
+				CLONE_NEWUTS: UTS Namespace 隔离 nodename 和 dominname
+				CLONE_NEWPID: PID Namespace 隔离进程ID
+				CLONE_NEWS: Mount Namespace 隔离进程看到挂载点视图 (文件系统)
+		*/
+		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
 	}
 
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Run(); err != nil { // 进入 子进程
 		panic(err)
 	}
 }
 
-func child() {
-	cmd := exec.Command(os.Args[2])
+func Init() {
 
-	// 实际在这里执行 docker 命令的参数
+	// 切换主机名
 	syscall.Sethostname([]byte("Container"))
+	// 在第二/三层中 挂载 内存中的 虚拟文件系统 proc
+	syscall.Mount("proc", "/proc", "proc", 0, "")
 
-	// 在本文件系统中
-	// 不允许运行其他程序 | 不允许 set-user-id/set-group-id | 从 linux 2.4 mount 默认参数
-	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
-	// 挂载根目录
-	syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
+	// 改变文件系统的根, 无法访问其他位置
+	syscall.Chroot("rootfs")
+	syscall.Chdir("/")
 
-	cmd.Stdout = os.Stdout
-	cmd.Stdin = os.Stdin
-	cmd.Stderr = os.Stderr
-
-	// 设置完成后运行bash
-	if err := cmd.Run(); err != nil {
+	// 开辟第三层,运行 bash 命令, 附带所有参数 与 第二层的所有环境变量(mount)
+	if err := syscall.Exec(os.Args[2], os.Args[3:], os.Environ()); // /bin/bash args... env...
+	err != nil {
 		panic(err)
 	}
+
+	// 取消 mount，退出取消 'mdocker init bash[1]' 这条线程的显示
 	syscall.Unmount("/proc", 0)
 }
