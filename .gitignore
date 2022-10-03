@@ -1,2 +1,4 @@
 bin/*
 rootfs
+base
+.vscode

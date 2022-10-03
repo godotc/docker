@@ -8,11 +8,11 @@ project=docker
 all: clean build install
 
 build:
-	$(GO) build -o $(BIN_PATH)/docker $(SRC_PATH)/*
+	$(GO) build -o $(BIN_PATH)/docker $(SRC_PATH)/*.go
 
 install:
-	cp bin/docker /usr/bin/docker
-	cp bin/docker /usr/local/bin/docker
+	cp bin/docker /usr/bin/
+	cp bin/docker /usr/local/bin/
 	mkdir -p /var/lib/docker/images
 	mkdir -p /var/lib/docker/volumes
 	mkdir -p /var/lib/docker/containers
