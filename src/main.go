@@ -1,10 +1,12 @@
 package main
 
 import (
+	"docker/src/utils_"
 	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -53,26 +55,27 @@ func Init() {
 	imageDirPath := "/var/lib/docker/images/base"
 	rootDirPath := "/var/lib/docker/containers/rootfs"
 	if _, err := os.Stat(rootDirPath); os.IsNotExist(err) {
-		__ErrCheck__(CopyFileOrDirectory(imageDirPath, rootDirPath))
+		utils_.ErrCheck(CopyFileOrDirectory(imageDirPath, rootDirPath))
 	}
+	time.Sleep(time.Second)
 
 	// 切换主机名
-	__ErrCheck__(syscall.Sethostname([]byte("Container")))
+	utils_.ErrCheck(syscall.Sethostname([]byte("Container")))
 
-	// 改变文件系统的根, 无法访问其他位置
-	__ErrCheck__(syscall.Chroot(rootDirPath))
-	__ErrCheck__(syscall.Chdir("/"))
+	// 先改变文件系统的根, 无法访问其他位置
+	utils_.ErrCheck(syscall.Chroot(rootDirPath))
+	utils_.ErrCheck(syscall.Chdir("/"))
 
 	// 在第二/三层中 挂载 内存中的 虚拟文件系统 proc
-	__ErrCheck__(syscall.Mount("proc", "/proc", "proc", 0, ""))
+	utils_.ErrCheck(syscall.Mount("proc", "/proc", "proc", 0, ""))
 
 	path, err := exec.LookPath(os.Args[2])
-	__ErrCheck__(err)
+	utils_.ErrCheck(err)
 	fmt.Println(path)
 
 	// 开辟第三层,运行 bash 命令, 附带所有参数 与 第二层的所有环境变量(mount)
-	err = syscall.Exec(path, os.Args[2:], os.Environ()) // /bin/bash args... env...
-	__ErrCheck__(err)
+	err = syscall.Exec(path, os.Args[3:], os.Environ()) // /bin/bash args... env...
+	utils_.ErrCheck(err)
 
 	// 取消 mount，退出取消 'mdocker init bash[1]' 这条线程的显示
 	syscall.Unmount("/proc", 0)
@@ -81,11 +84,6 @@ func Init() {
 func CopyFileOrDirectory(src string, dst string) error {
 	fmt.Printf("Copying %s => %s\n", src, dst)
 	cmd := exec.Command("cp", "-r", src, dst)
+	utils_.AttachCmdToStd(cmd)
 	return cmd.Run()
-}
-
-func __ErrCheck__(err error) {
-	if err != nil {
-		panic(err)
-	}
 }
