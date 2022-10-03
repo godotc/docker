@@ -5,7 +5,7 @@ import (
 	"os/exec"
 )
 
-func ErrCheck(err error) {
+func Err(err error) {
 	if err != nil {
 		panic(err)
 	}

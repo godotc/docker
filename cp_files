@@ -1,3 +1,10 @@
+Way to make home-made image:
+    1. find the ldd of /bin/*
+    2. cp bin to rootfs/bin/
+    3. cp *.so to rootfs/path/that/corresponding/
+    4. mkdir rootfs/proc (ps and mount)
+     
+
 In root:
 $ ldd /bin/bash
     linux-vdso.so.1 =>               linux-vdso.so.1 (0x00007fff38fca000)
