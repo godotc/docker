@@ -1,98 +1,19 @@
 package main
 
 import (
-	"docker/src/utils_"
-	"fmt"
-	"os"
-	"os/exec"
-	"syscall"
-	"time"
+	"docker/src/cmds"
+
+	"github.com/spf13/cobra"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		PrintHelpManual()
-		return
+	var rootCmd = &cobra.Command{
+		Use: "docer [Command]",
 	}
 
-	fmt.Printf("Process => %v [%d]\n", os.Args, os.Getpid())
-	switch os.Args[1] {
-	case "run":
-		Run()
-	case "init":
-		Init()
-	default:
-		panic("Argument  error")
-	}
-}
+	rootCmd.AddCommand(cmds.InitRunCmd())
+	rootCmd.AddCommand(cmds.InitChildCmd())
+	rootCmd.AddCommand(cmds.InitLogsCmd())
 
-func Run() {
-	// 拼接原命令再次运行 docker 进入 Init 分支 (创建子进程)
-	cmd := exec.Command(os.Args[0], "init", os.Args[2])
-
-	// 设置进程程隔离 thread-isolation, 用户id隔离
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		/*
-			Linux Namespace:
-				CLONE_NEWUTS: UTS Namespace 隔离 nodename 和 dominname
-				CLONE_NEWPID: PID Namespace 隔离进程ID
-				CLONE_NEWS: Mount Namespace 隔离进程看到挂载点视图 (文件系统)
-				CLONE_NEWIPC: IPC Namespace 隔离 System V IPC 和 POSIX Message Queues
-				CLONE_NEWUSER: User Namespace 隔离用户组ID 防止拥有(root)权限
-		*/
-		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWIPC | syscall.CLONE_NEWUSER,
-		// map 外界的id(非root) 到 容器内的 uer id 和 group id
-		UidMappings: []syscall.SysProcIDMap{
-			{
-				ContainerID: 0,
-				HostID:      os.Getuid(),
-				Size:        1, // default
-			},
-		},
-		GidMappings: []syscall.SysProcIDMap{
-			{
-				ContainerID: 0,
-				HostID:      os.Getgid(),
-				Size:        1,
-			},
-		},
-	}
-
-	utils_.AttachCmdToStd(cmd)
-
-	// 隔离后 进入子进程 再次开辟子进程
-	if err := cmd.Run(); err != nil {
-		panic(err)
-	}
-	cmd.Wait()
-}
-
-func Init() {
-	imageDirPath := "/var/lib/docker/images/base"
-	rootDirPath := "/var/lib/docker/containers/" + GenerateContainerId(64)
-	if _, err := os.Stat(rootDirPath); os.IsNotExist(err) {
-		utils_.Err(CopyFileOrDirectory(imageDirPath, rootDirPath))
-	}
-	time.Sleep(time.Second)
-
-	// 切换主机名
-	utils_.Err(syscall.Sethostname([]byte("Container")))
-
-	// 先改变文件系统的根, 无法访问其他位置
-	utils_.Err(syscall.Chroot(rootDirPath))
-	utils_.Err(syscall.Chdir("/"))
-
-	// 在第二/三层中 挂载 内存中的 虚拟文件系统 proc
-	utils_.Err(syscall.Mount("proc", "/proc", "proc", 0, ""))
-
-	path, err := exec.LookPath(os.Args[2])
-	utils_.Err(err)
-	fmt.Println(path)
-
-	// 开辟第三层,运行 bash 命令, 附带所有参数 与 第二层的所有环境变量(mount)
-	err = syscall.Exec(path, os.Args[3:], os.Environ()) // /bin/bash args... env...
-	utils_.Err(err)
-
-	// 取消 mount，退出取消 'mdocker init bash[1]' 这条线程的显示
-	syscall.Unmount("/proc", 0)
+	rootCmd.Execute()
 }

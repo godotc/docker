@@ -16,6 +16,7 @@ install:
 	mkdir -p /var/lib/docker/images
 	mkdir -p /var/lib/docker/volumes
 	mkdir -p /var/lib/docker/containers
+	cp -r base /var/lib/docker/images
 
 unistall:
 	rm -rf /usr/bin/docker  /usr/local/bin/docker
@@ -23,5 +24,3 @@ unistall:
 	
 clean: unistall
 
-run: 
-	docker run /bin/bash
