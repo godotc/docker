@@ -1,3 +1,6 @@
+# Create a image for docker run
+
+## 1. Copy bin file and dynamic so
 - Way to make home-made image:
     1. find the ldd of /bin/*
     2. cp bin to rootfs/bin/
@@ -31,3 +34,13 @@ linux-vdso.so.1 => linux-vdso.so.1 (0x00007ffd749f8000)
     /usr/lib/libc.so.6 \
     /usr/lib/libncursesw.so.6 \
     /usr/lib64/ld-linux-x86-64.so.2 \
+    ...
+
+
+## 2. Export from docek
+
+1. From outer docker, docker pull archlinux
+2. docker export -o archlinux.tar [imageId]
+3. tar -xvf archlinux.tar -C base
+
+> Need the corresponding architecture of container  

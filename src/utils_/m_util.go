@@ -1,13 +1,14 @@
 package utils_
 
 import (
+	"docker/src/alert"
 	"os"
 	"os/exec"
 )
 
-func Err(err error) {
+func Err(err error, code string) {
 	if err != nil {
-		panic(err)
+		alert.Show(err, code)
 	}
 }
 

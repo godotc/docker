@@ -1,16 +1,21 @@
 package container
 
 import (
+	"docker/src/alert"
 	"docker/src/utils_"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"syscall"
 )
 
-func CreateParentProcess(is_interactive, is_tty bool, args []string) *exec.Cmd {
+func CreateParentProcess(containerName string, is_interactive, is_tty bool, args []string) *exec.Cmd {
 	// 拼接原命令再次运行 docker 进入 Init 分支 (创建子进程)
 	// "/proc/self/exe" 等同于 docker 命令 本身 即: docker child args...
-	cmd := exec.Command("/proc/self/exe", "child", args[0])
+	args = append([]string{containerName}, args[0:]...)
+	logFilePath := filepath.Join(ROOT_FOLDER_PATH_PREFIX, containerName, LOG_FILENAME)
+	cmd := exec.Command("/proc/self/exe", "child", strings.Join(args, " "))
 
 	// 设置进程程隔离 thread-isolation, 用户id隔离
 	cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -40,8 +45,24 @@ func CreateParentProcess(is_interactive, is_tty bool, args []string) *exec.Cmd {
 		},
 	}
 
-	// 根据 flag 判断是否附加到 stdout/in/err
-	utils_.AttachCmdToStd(cmd, is_interactive, is_tty)
+	imageFolderPath := IMAGE_FOLDER_PATH
+	rootFolderPath := filepath.Join(ROOT_FOLDER_PATH_PREFIX, containerName, ROOTFS_NAME)
+
+	// Copy image
+	if _, err := os.Stat(rootFolderPath); os.IsNotExist(err) {
+		utils_.Err(utils_.CopyFileOrDirectory(imageFolderPath, rootFolderPath), "013")
+	}
+
+	// 根据 flag 判断是否附加到 stdout/in/err, 或则输出到日志文件
+	if is_tty {
+		utils_.AttachCmdToStd(cmd, is_interactive, is_tty)
+	} else {
+		// detach mode
+		logFile, err := os.Create(logFilePath)
+		utils_.Err(err, "014")
+		cmd.Stdout = logFile
+		alert.Debug(containerName)
+	}
 
 	return cmd
 }
